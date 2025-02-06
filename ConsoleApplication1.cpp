@@ -9,7 +9,7 @@ int main() {
     ofstream outfile("result.txt");
     if (!outfile)
     {
-        cerr << "îøèáêà îòêðûòèÿ ôàéëà" << endl;
+        cerr << oshibka pri otritie faila" << endl;
         return 1;
     }
     int max_n = 30;
