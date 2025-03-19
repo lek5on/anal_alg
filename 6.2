@@ -1,0 +1,147 @@
+
+#include <iostream>
+#include <vector>
+#include <string>
+#include <random>
+#include <fstream>
+#include <cmath>
+#include <set>
+
+using namespace std;
+
+// Генератор случайных чисел
+random_device rd;
+mt19937 gen(rd());
+
+// Функция для генерации случайной строки длиной от 5 до 20 символов из ASCII (33-126)
+string generateRandomString() {
+    uniform_int_distribution<> lengthDist(5, 20);
+    uniform_int_distribution<> charDist(33, 126);
+    int length = lengthDist(gen);
+    string result;
+    for (int i = 0; i < length; ++i) {
+        result += static_cast<char>(charDist(gen));
+    }
+    return result;
+}
+
+// Функция h(x), возвращает хэш-значение
+int h(const string& x, int N) {
+    unsigned long hash = 0;
+    for (char c : x) {
+        hash = (hash * 31 + c) % N;
+    }
+    return hash;
+}
+
+// Генерация набора r_j (2000 чисел)
+vector<int> generateRandomProbes(int N) {
+    vector<int> rj(N);
+    uniform_int_distribution<> dist(1, N - 1);
+    set<int> used;
+
+    for (int i = 0; i < N; ++i) {
+        int r;
+        do {
+            r = dist(gen);
+        } while (used.find(r) != used.end());
+        used.insert(r);
+        rj[i] = r;
+    }
+    return rj;
+}
+
+// Класс хеш-таблицы с случайным рехэшированием
+class HashTable {
+private:
+    vector<string> table;
+    vector<bool> occupied;
+    vector<int> rj;
+    int size;
+    int collisions;
+
+public:
+    HashTable(int N, const vector<int>& probes) : size(N), rj(probes), collisions(0) {
+        table.resize(N, "");
+        occupied.resize(N, false);
+    }
+
+    void insert(const string& x) {
+        int index = h(x, size);
+        int originalIndex = index;
+        int probeCount = 0;
+
+        while (occupied[index]) {
+            probeCount++;
+            if (probeCount >= size) {
+                return;
+            }
+            index = (h(x, size) + rj[probeCount - 1]) % size;
+            if (index == originalIndex) {
+                return;
+            }
+        }
+
+        if (probeCount > 0) {
+            collisions += probeCount;
+        }
+
+        table[index] = x;
+        occupied[index] = true;
+    }
+
+    int getCollisions() const {
+        return collisions;
+    }
+};
+
+// Генерация выборки и заполнение хеш-таблицы
+pair<HashTable, int> generateAndFillHashTable(int N, double alpha, const vector<int>& rj) {
+    HashTable ht(N, rj);
+    int numElements = static_cast<int>(N * alpha);
+
+    for (int i = 0; i < numElements; ++i) {
+        string obj = generateRandomString();
+        ht.insert(obj);
+    }
+
+    return {ht, numElements};
+}
+
+int main() {
+    const int N = 2000;
+    const int experiments = 1000;
+
+    ofstream outFile("collisions.txt");
+    if (!outFile) {
+        cout << "Error: Cannot open collisions.txt for writing!" << endl;
+        return 1;
+    }
+    outFile << "Alpha,Collisions\n";
+
+    for (double alpha = 0.05; alpha <= 0.95 + 1e-6; alpha += 0.05) {
+        double avgCollisions = 0.0;
+
+        cout << "Processing alpha = " << alpha << "..." << endl;
+        for (int exp = 0; exp < experiments; ++exp) {
+            vector<int> rj = generateRandomProbes(N);
+            pair<HashTable, int> result = generateAndFillHashTable(N, alpha, rj);
+            HashTable ht = result.first;
+            int numElements = result.second;
+
+            avgCollisions += ht.getCollisions();
+            if (exp % 100 == 0) { // Вывод каждые 100 экспериментов
+                cout << "Experiment " << exp + 1 << " done for alpha = " << alpha << endl;
+            }
+        }
+
+        avgCollisions /= experiments;
+        cout << "Alpha: " << alpha << ", Average Collisions: " << avgCollisions << endl;
+        outFile << alpha << "," << avgCollisions << "\n";
+    }
+
+    outFile.close();
+    cout << "Data saved to collisions.txt for plotting C(alpha)." << endl;
+
+    return 0;
+}
